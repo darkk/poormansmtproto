@@ -6,6 +6,7 @@ import random
 import socket
 import os
 import itertools
+import binascii
 
 C, S = object(), object()
 
@@ -30,6 +31,8 @@ EXCHANGE = (
 
 EXCHANGE = [(end, bytearray(bytes.fromhex(s))) for end, s in EXCHANGE]
 
+SLICE_SERVER = True
+
 def fdskip(fd, nbytes):
     while nbytes > 0:
         ans = fd.recv(nbytes)
@@ -39,6 +42,7 @@ def fdskip(fd, nbytes):
 
 class MyTCPHandler(socketserver.BaseRequestHandler):
     def handle(self):
+        gen = random.Random(x=SEED)
         print('Connected from {}'.format(self.client_address))
         for ex in itertools.count():
             print('Pass #{:d}'.format(ex))
@@ -49,14 +53,15 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                 elif end is S:
                     for i in range(len(blob)):
                         blob[i] ^= mask[0]
-
-                    self.request.sendall(blob)
+                    nbytes = gen.randrange(len(blob)) if SLICE_SERVER else len(blob)
+                    self.request.sendall(blob[0:nbytes])
                 else:
                     assert False
 
 def tgcli(host, port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as fd:
         fd.connect((host, port))
+        gen = random.Random(x=SEED)
         print('Connected to {}'.format((host, port)))
         for ex in itertools.count():
             print('Pass #{:d}'.format(ex))
@@ -67,22 +72,24 @@ def tgcli(host, port):
                         blob[i] ^= mask[0]
                     fd.sendall(blob)
                 elif end is S:
-                    fdskip(fd, len(blob))
+                    nbytes = gen.randrange(len(blob)) if SLICE_SERVER else len(blob)
+                    fdskip(fd, nbytes)
                 else:
                     assert False
 
 def main():
     nargs = len(sys.argv)
-    if nargs == 2:
-        host, port = '0.0.0.0', int(sys.argv[1])
-        print('Serving at {:d}'.format(port))
+    global SEED
+    if nargs == 1:
+        host, port, SEED = '0.0.0.0', random.randint(1024, 32767), int(binascii.hexlify(os.urandom(4)).decode('ascii'), 16)
+        print('Serving with following port/seed: {:d} {:d}'.format(port, SEED))
         server = socketserver.TCPServer((host, port), MyTCPHandler)
         server.serve_forever()
-    elif nargs == 3:
-        host, port = sys.argv[1], int(sys.argv[2])
+    elif nargs == 4:
+        host, port, SEED = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
         tgcli(host, port)
     else:
-        print('Usage: nqtg.py [host] <port>')
+        print('Usage: nqtg.py [host port seed]')
 
 if __name__ == '__main__':
     main()
