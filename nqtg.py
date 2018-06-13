@@ -31,7 +31,11 @@ EXCHANGE = (
 
 EXCHANGE = [(end, bytearray(bytes.fromhex(s))) for end, s in EXCHANGE]
 
+SEED = object()
+MAGIC_SEED = 1693627364
 SLICE_SERVER = True
+SLICE_CLIENT = True
+
 
 def fdskip(fd, nbytes):
     while nbytes > 0:
@@ -42,18 +46,20 @@ def fdskip(fd, nbytes):
 
 class MyTCPHandler(socketserver.BaseRequestHandler):
     def handle(self):
-        gen = random.Random(x=SEED)
+        srvgen = random.Random(x=SEED)
+        cligen = random.Random(x=(SEED^MAGIC_SEED))
         print('Connected from {}'.format(self.client_address))
         for ex in itertools.count():
             print('Pass #{:d}'.format(ex))
             mask = bytearray(os.urandom(1))
             for end, blob in EXCHANGE:
                 if end is C:
-                    fdskip(self.request, len(blob))
+                    nbytes = cligen.randrange(len(blob)) if SLICE_CLIENT else len(blob)
+                    fdskip(self.request, nbytes)
                 elif end is S:
                     for i in range(len(blob)):
                         blob[i] ^= mask[0]
-                    nbytes = gen.randrange(len(blob)) if SLICE_SERVER else len(blob)
+                    nbytes = srvgen.randrange(len(blob)) if SLICE_SERVER else len(blob)
                     self.request.sendall(blob[0:nbytes])
                 else:
                     assert False
@@ -61,7 +67,8 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
 def tgcli(host, port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as fd:
         fd.connect((host, port))
-        gen = random.Random(x=SEED)
+        srvgen = random.Random(x=SEED)
+        cligen = random.Random(x=(SEED^MAGIC_SEED))
         print('Connected to {}'.format((host, port)))
         for ex in itertools.count():
             print('Pass #{:d}'.format(ex))
@@ -70,9 +77,10 @@ def tgcli(host, port):
                 if end is C:
                     for i in range(len(blob)):
                         blob[i] ^= mask[0]
-                    fd.sendall(blob)
+                    nbytes = cligen.randrange(len(blob)) if SLICE_CLIENT else len(blob)
+                    fd.sendall(blob[0:nbytes])
                 elif end is S:
-                    nbytes = gen.randrange(len(blob)) if SLICE_SERVER else len(blob)
+                    nbytes = srvgen.randrange(len(blob)) if SLICE_SERVER else len(blob)
                     fdskip(fd, nbytes)
                 else:
                     assert False
