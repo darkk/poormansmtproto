@@ -38,6 +38,7 @@ SLICE_SERVER = True
 SLICE_CLIENT = False
 
 CLIENT_WAIT_SRV = False
+CLIENT_BLOB_XOR8 = False
 
 
 def fdskip(fd, nbytes):
@@ -78,9 +79,12 @@ def tgcli(host, port):
             mask = bytearray(os.urandom(1))
             for end, blob in EXCHANGE:
                 if end is C:
-                    for i in range(len(blob)):
-                        blob[i] ^= mask[0]
                     nbytes = cligen.randrange(len(blob)) if SLICE_CLIENT else len(blob)
+                    if CLIENT_BLOB_XOR8:
+                        for i in range(len(blob)):
+                            blob[i] ^= mask[0]
+                    else:
+                        blob = os.urandom(nbytes)
                     fd.sendall(blob[0:nbytes])
                 elif end is S:
                     if CLIENT_WAIT_SRV:
