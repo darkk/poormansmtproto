@@ -2,6 +2,7 @@
 
 import socketserver
 import sys
+import time
 import random
 import socket
 import os
@@ -34,7 +35,9 @@ EXCHANGE = [(end, bytearray(bytes.fromhex(s))) for end, s in EXCHANGE]
 SEED = object()
 MAGIC_SEED = 1693627364
 SLICE_SERVER = True
-SLICE_CLIENT = True
+SLICE_CLIENT = False
+
+CLIENT_WAIT_SRV = False
 
 
 def fdskip(fd, nbytes):
@@ -80,8 +83,11 @@ def tgcli(host, port):
                     nbytes = cligen.randrange(len(blob)) if SLICE_CLIENT else len(blob)
                     fd.sendall(blob[0:nbytes])
                 elif end is S:
-                    nbytes = srvgen.randrange(len(blob)) if SLICE_SERVER else len(blob)
-                    fdskip(fd, nbytes)
+                    if CLIENT_WAIT_SRV:
+                        nbytes = srvgen.randrange(len(blob)) if SLICE_SERVER else len(blob)
+                        fdskip(fd, nbytes)
+                    else:
+                        time.sleep(srvgen.uniform(0.5, 1.0))
                 else:
                     assert False
 
